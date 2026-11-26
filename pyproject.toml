@@ -14,3 +14,8 @@ ignore = ["N802", "N806"]  # math-style names (L1, Lam, G) are intentional
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.ruff.lint.per-file-ignores]
+# printed figure and report text uses typographic minus and multiplication signs on purpose
+"quantum/new/figures.py" = ["RUF001"]
+"quantum/new/report.py" = ["RUF001", "E501"]  # long lines are report prose

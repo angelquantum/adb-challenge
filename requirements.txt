@@ -4,6 +4,7 @@ matplotlib~=3.11
 qiskit~=2.6
 qiskit-aer~=0.18
 qiskit-algorithms~=0.4
+reportlab~=5.1
 # dev
 pytest
 ruff
