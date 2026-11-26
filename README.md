@@ -85,4 +85,29 @@ First prototype: loads the joint loss distribution into amplitudes, computes the
 
 Current method: shared-shock state loading combined with Iterative QAE (Grinko et al., 2021). No phase estimation, so circuits are shallower and closer to what current hardware can run. Reports estimates against the exact values, plus resource counts (qubits, depth, two-qubit gates, shots).
 
-> Code not yet committed.
+The brief's model is generalised to n countries (alternating Kyrgyz-like and Tajik-like parameters, one regional earthquake stream, one regional rain stream, T = half the total principal). At n = 2 it is exactly the brief's model and reproduces Table 5 through the `classical` package. Given the shared shock state z = (K regional quakes, J regional rain), the countries are independent, so the joint law is a mixture of 10 product laws. The exact solver and the quantum state preparation both use this.
+
+Run from the repo root:
+
+```bash
+python -m quantum.new --n 5 --target exceedance --eps 0.01         # one IQAE run per target, with resources
+python -m quantum.new --n 2 --backend aer                          # IQAE on the actual Qiskit circuits (Aer)
+python -m quantum.new.benchmark                                    # 2, 3, 5, 10 countries -> quantum/new/results/ (~1 h, 12 cores)
+python -m quantum.new.report                                       # figures + docs/IQAE_benchmark_and_limits_2-10_countries.pdf
+```
+
+`python -m quantum.new` options: `--n`, `--scenario`, `--target` (`all`, `expected_loss`, `all_pay`, `exceedance`, `stop_loss`, `all_exhausted`), `--eps` (relative CI half-width), `--alpha`, `--shots` (per round), `--backend oracle|aer`, `--shots-mode` (literal measured shots on Aer).
+
+| Module | Contents |
+|---|---|
+| `portfolio.py` | n-country model, shock-state factorisation, exact solver, brute-force check |
+| `baselines.py` | n-country Monte Carlo, scrambled Sobol, stratified (on the shock state), importance sampling |
+| `iqae.py` | IQAE with Clopper-Pearson intervals and a pluggable backend: exact Grover statistics (with optional depolarising noise) or the circuits |
+| `circuits.py` | Qiskit oracles (shared-shock loader, Fourier-adder loss register, all-pay / all-exhausted objectives, lookup oracle), Grover operator, gate and Clifford+T counts, `CircuitSampler` on Aer |
+| `resources.py` | fault-tolerant estimate (T counts, code distance, physical qubits, run time) |
+| `benchmark.py` | exact, classical baselines, IQAE, circuit counts, noise, depth/query trade-offs, Aer validation and end-to-end runs |
+| `analysis.py`, `figures.py`, `report.py` | result tables, figures and the PDF |
+
+Outputs in `quantum/new/results/`: `BENCHMARK.md` (summary tables), `exact.csv`, `classical.csv`, `iqae.csv`, `counts.csv`, `noise.csv`, `noisy_circuit.csv`, `tradeoff.csv`, `validation.csv`, `e2e.csv`, `figures/`. The report [docs/IQAE_benchmark_and_limits_2-10_countries.pdf](docs/IQAE_benchmark_and_limits_2-10_countries.pdf) covers the benchmark at 2, 3, 5 and 10 countries and the factors that limit IQAE: depth growing as the event gets rarer, gate-error requirements, noise bias, the depth–query trade-off, the confidence level, fault-tolerant cost, and the classical shortcut this model allows.
+
+Tests: `pytest tests/test_iqae.py` checks Table 5 at n = 2, brute force at n = 3 and 4, the samplers, IQAE coverage, and that the oracles load the exact amplitudes on Aer. It also runs an end-to-end IQAE on the circuits.
