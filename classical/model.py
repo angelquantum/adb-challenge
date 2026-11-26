@@ -1,8 +1,8 @@
 """
-ADB 2-country catastrophe bond model 
+ADB 2-country catastrophe bond model
 (brief - Section 3b, steps 1 -7)
 
-Builds the exact annual and 3-year term distributions 
+Builds the exact annual and 3-year term distributions
 over the state:
     (a, b, r1, r2):
         - a, b : cumulative earthquake steps, country 1 / 2, values on [0,...,4]
@@ -20,8 +20,9 @@ EARTHQUAKE_STEPS = 5 # 0 to 4
 RAIN_STEPS = 2       # 0 or 1
 ANNUAL_SHAPE = (EARTHQUAKE_STEPS, EARTHQUAKE_STEPS, RAIN_STEPS, RAIN_STEPS) # 100
 N_ANNUAL = int(np.prod(ANNUAL_SHAPE))  # 100
+STATE_CAP = np.array(ANNUAL_SHAPE) - 1  # (4, 4, 1, 1)
 
-@dataclass
+@dataclass(frozen=True)
 class Scenario:
     """All inputs of one benchmark scenario. Defaults are the base case."""
     name: str = "adb-base"
@@ -39,16 +40,17 @@ class Scenario:
     eq_limit: float = 70e6 # 70m on earthquakes
     pr_limit: float = 10e6 # 10m on rain
     years: int = 3
-    threshold: float = 80e6 # T for exceedance, total investment
+    threshold: float = 80e6 # T for portfolio exceedance / stop-loss
 
     @property
     def principal(self) -> float:
-        return self.threshold
+        """Per-bond principal: EQ limit + precipitation limit."""
+        return self.eq_limit + self.pr_limit
 
 _BASE = Scenario()
 SCENARIOS: dict[str, Scenario] = {
     "adb-base"          : _BASE,
-    "adb-independent"   : replace(_BASE, 
+    "adb-independent"   : replace(_BASE,
                                   name="adb-independent",
                                   eq_m=0.0,
                                   pr_cr=0.0),
@@ -65,7 +67,12 @@ SCENARIOS: dict[str, Scenario] = {
 }
 
 def get_scenario(scenario: str | Scenario) -> Scenario:
-    return SCENARIOS[scenario] if isinstance(scenario, str) else scenario
+    if isinstance(scenario, Scenario):
+        return scenario
+    try:
+        return SCENARIOS[scenario]
+    except KeyError:
+        raise ValueError(f"unknown scenario {scenario!r}; choose from {list(SCENARIOS)}") from None
 
 # =================================
 #           Earthquake
@@ -74,6 +81,10 @@ def compound_poisson_rates(tail: tuple[float, ...]) -> tuple[np.ndarray, float]:
     """
     Step 2, eqs (2)-(3): rates (λ1...λ4) and total rate λ
     """
+    if len(tail) != EARTHQUAKE_STEPS - 1:
+        raise ValueError(f"expected {EARTHQUAKE_STEPS - 1} tail probabilities, got {len(tail)}")
+    if not 1 > tail[0] >= tail[1] >= tail[2] >= tail[3] >= 0:
+        raise ValueError(f"tail probabilities must be non-increasing in [0, 1): {tail}")
     t1, t2, t3, t4 = tail
     p0, p1, p2, p3 = 1 - t1, t1 - t2, t2 - t3, t3 - t4
     Lam = -np.log(p0)
@@ -81,7 +92,10 @@ def compound_poisson_rates(tail: tuple[float, ...]) -> tuple[np.ndarray, float]:
     l2 = p2 / p0 - l1**2 / 2
     l3 = p3 / p0 - l1 * l2 - l1**3 / 6
     l4 = Lam - l1 - l2 - l3
-    return np.array([l1, l2, l3, l4]), Lam
+    rates = np.array([l1, l2, l3, l4])
+    if np.any(rates < 0):
+        raise ValueError(f"tail {tail} implies negative compound-Poisson rates {rates}")
+    return rates, Lam
 
 
 def shared_eq_rate(s: Scenario) -> float:
@@ -101,33 +115,36 @@ def eq_generator(s: Scenario) -> np.ndarray:
     lam2, L2 = compound_poisson_rates(s.eq_tail_2)
     w1, w2 = lam1 / L1, lam2 / L2
     c = shared_eq_rate(s)
+    if not 0 <= c <= min(L1, L2):
+        raise ValueError(f"shared rate c={c:.4g} must lie in [0, min(L1, L2)={min(L1, L2):.4g}]")
     n = EARTHQUAKE_STEPS
-    G = np.zeros((n*n, n*n))
+    top = n - 1
+    G = np.zeros((n * n, n * n))
     for a in range(n):
         for b in range(n):
-            i = n*a + b
-            for k in range(1, 5):
-                G[i, n * min(a+k, 4) + b] += (L1 - c) * w1[k - 1]
-                G[i, n * a + min(b+k, 4)] += (L2 - c) * w2[k - 1]
-                for j in range(1, 5):
-                    G[i, n * min(a + k, 4) + min(b + j, 4)] += c * w1[k - 1] * w2[j - 1]
+            i = n * a + b
+            for k in range(1, n):
+                G[i, n * min(a + k, top) + b] += (L1 - c) * w1[k - 1]
+                G[i, n * a + min(b + k, top)] += (L2 - c) * w2[k - 1]
+                for j in range(1, n):
+                    G[i, n * min(a + k, top) + min(b + j, top)] += c * w1[k - 1] * w2[j - 1]
     np.fill_diagonal(G, 0.0) # self-loops at the cap are no-ops
     np.fill_diagonal(G, -G.sum(axis=1))
     return G
 
 def eq_annual(scenario: str | Scenario) -> np.ndarray:
     """
-    Annuak joint EQ distribution, shape (5, 5): P[a, b]
+    Annual joint EQ distribution, shape (5, 5): P[a, b]
     """
     s = get_scenario(scenario)
-    return expm(eq_generator(s))[0].reshape(EARTHQUAKE_STEPS, RAIN_STEPS)
+    return expm(eq_generator(s))[0].reshape(EARTHQUAKE_STEPS, EARTHQUAKE_STEPS)
 
 # =================================
 #           Precipitation
 # =================================
 def pr_annual(scenario: str | Scenario) -> np.ndarray:
     """
-    Step 5, eqs. (5)-(6): annual percipitation distribution, shape (2, 2): P[r1, r2]
+    Step 5, eqs. (5)-(6): annual precipitation distribution, shape (2, 2): P[r1, r2]
     """
     s = get_scenario(scenario)
     mu = -np.log(1 - s.pr_annual_prob) * s.pr_m
@@ -160,7 +177,7 @@ def add_capped(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     """
     Add state arrays (..., 4) and cap at (4, 4, 1, 1)
     """
-    return np.minimum(x + y, np.array([4, 4, 1, 1]))
+    return np.minimum(x + y, STATE_CAP)
 
 
 def term_distribution(scenario: str | Scenario) -> np.ndarray:
@@ -191,6 +208,7 @@ def losses(states: np.ndarray, scenario: str | Scenario) -> tuple[np.ndarray, np
     """
     s = get_scenario(scenario)
     a, b, r1, r2 = (states[..., i] for i in range(4))
-    L1 = scenario.eq_limit * a / 4 + s.pr_limit * r1
-    L2 = scenario.eq_limit * b / 4 + s.pr_limit * r2
+    top = EARTHQUAKE_STEPS - 1
+    L1 = s.eq_limit * a / top + s.pr_limit * r1
+    L2 = s.eq_limit * b / top + s.pr_limit * r2
     return L1, L2
