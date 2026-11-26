@@ -111,3 +111,29 @@ python -m quantum.new.report                                       # figures + d
 Outputs in `quantum/new/results/`: `BENCHMARK.md` (summary tables), `exact.csv`, `classical.csv`, `iqae.csv`, `counts.csv`, `noise.csv`, `noisy_circuit.csv`, `tradeoff.csv`, `validation.csv`, `e2e.csv`, `figures/`. The report [docs/IQAE_benchmark_and_limits_2-10_countries.pdf](docs/IQAE_benchmark_and_limits_2-10_countries.pdf) covers the benchmark at 2, 3, 5 and 10 countries and the factors that limit IQAE: depth growing as the event gets rarer, gate-error requirements, noise bias, the depth–query trade-off, the confidence level, fault-tolerant cost, and the classical shortcut this model allows.
 
 Tests: `pytest tests/test_iqae.py` checks Table 5 at n = 2, brute force at n = 3 and 4, the samplers, IQAE coverage, and that the oracles load the exact amplitudes on Aer. It also runs an end-to-end IQAE on the circuits.
+
+## Distributed IQAE
+
+Distributed IQAE runs independent local circuits on country groups and combines their estimates on a
+classical host. It reuses the repository's shared-shock conditional distributions and
+Qiskit/Aer IQAE backend. The host fixes the capped shared earthquake count and shared
+rain flag for each stratum. Two single-country QPUs require five logical wires each,
+including one reusable objective flag.
+
+    python -m quantum.new.distributed_iqae --scenario adb-base --capacities 5 6 --seed 1729
+
+The command reports all five estimates and intervals as JSON, along with per-QPU shots,
+forward and inverse preparations, and timings. Each inverse preparation corresponds to
+one local Grover iterate. The --groups option takes space-separated QPU groups, with
+comma-separated zero-based country indices within each group. For example, use
+--countries 3 --groups 0,1 2. Add --parallel to run independent simulator workloads
+concurrently. The --epsilon option controls local normalized precision, and --shots
+and --max-rounds set the per-task budget. A local interval can remain wider than the
+requested precision at the round cap.
+
+The coordinator adds conditional expected losses, multiplies conditional attachment
+and exhaustion probabilities, and convolves conditional group loss distributions for
+exceedance and stop loss. It averages the results over the shared-shock weights.
+Portfolio intervals account for the family of local estimates and propagate loss-CDF
+bounds by stochastic ordering. The local circuits execute in simulation, and portfolio
+aggregation runs classically.
