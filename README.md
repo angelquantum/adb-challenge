@@ -112,15 +112,15 @@ Outputs in `quantum/new/results/`: `BENCHMARK.md` (summary tables), `exact.csv`,
 
 Tests: `pytest tests/test_iqae.py` checks Table 5 at n = 2, brute force at n = 3 and 4, the samplers, IQAE coverage, and that the oracles load the exact amplitudes on Aer. It also runs an end-to-end IQAE on the circuits.
 
-## A1 distributed IQAE
+## Distributed IQAE
 
-A1 runs independent local circuits on country groups and combines their estimates on a
+Distributed IQAE runs independent local circuits on country groups and combines their estimates on a
 classical host. It reuses the repository's shared-shock conditional distributions and
 Qiskit/Aer IQAE backend. The host fixes the capped shared earthquake count and shared
 rain flag for each stratum. Two single-country QPUs require five logical wires each,
 including one reusable objective flag.
 
-    python -m quantum.new.a1 --scenario adb-base --capacities 5 6 --seed 1729
+    python -m quantum.new.distributed_iqae --scenario adb-base --capacities 5 6 --seed 1729
 
 The command reports all five estimates and intervals as JSON, along with per-QPU shots,
 forward and inverse preparations, and timings. Each inverse preparation corresponds to

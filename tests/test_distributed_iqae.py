@@ -1,20 +1,20 @@
 import numpy as np
 import pytest
 
-from quantum.new.a1 import (
+from quantum.new.distributed_iqae import (
     Estimate,
     _aggregate,
     _group_law,
     _loss_masses,
     _tasks,
-    run_a1,
+    run_distributed_iqae,
 )
 from quantum.new.portfolio import adb_portfolio, exact_targets, loss_unit, outcome_losses, shock_model
 
 
 @pytest.mark.parametrize("scenario", ["adb-base", "adb-common-shock", "adb-rain-cover"])
 @pytest.mark.parametrize("groups", [((0,), (1,)), ((0, 1),)])
-def test_a1_aggregation_matches_exact_conditional_reference(scenario, groups):
+def test_distributed_iqae_aggregation_matches_exact_conditional_reference(scenario, groups):
     portfolio = adb_portfolio(2, scenario)
     pz, cond = shock_model(portfolio)
     unit = loss_unit(portfolio)
@@ -50,14 +50,16 @@ def test_cdf_bands_enclose_compatible_loss_distribution():
 def test_capacity_is_checked_before_execution():
     portfolio = adb_portfolio(2)
     with pytest.raises(ValueError, match="QPU 2 requires 5 qubits"):
-        run_a1(portfolio, capacities=(6, 4))
+        run_distributed_iqae(portfolio, capacities=(6, 4))
     with pytest.raises(ValueError, match="exactly once"):
-        run_a1(portfolio, groups=((0,), (0, 1)))
+        run_distributed_iqae(portfolio, groups=((0,), (0, 1)))
 
 
-def test_a1_runs_independent_five_qubit_circuits():
+def test_distributed_iqae_runs_independent_five_qubit_circuits():
     portfolio = adb_portfolio(2, "adb-independent")
-    result = run_a1(portfolio, capacities=(5, 6), epsilon=0.05, shots=128, max_rounds=3, seed=12)
+    result = run_distributed_iqae(
+        portfolio, capacities=(5, 6), epsilon=0.05, shots=128, max_rounds=3, seed=12
+    )
     assert result.shared_strata == 1
     assert [qpu.qubits for qpu in result.qpus] == [5, 5]
     for qpu in result.qpus:

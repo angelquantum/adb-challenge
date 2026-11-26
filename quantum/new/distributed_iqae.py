@@ -1,4 +1,4 @@
-"""A1: independent conditional IQAE circuits and classical portfolio aggregation."""
+"""Distributed IQAE with independent conditional circuits and classical portfolio aggregation."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ class QPUWork:
 
 
 @dataclass(frozen=True)
-class A1Result:
+class DistributedIQAEResult:
     targets: dict[str, Estimate]
     qpus: tuple[QPUWork, ...]
     shared_strata: int
@@ -193,7 +193,7 @@ def _aggregate(portfolio, unit, weights, laws_by_qpu, estimates_by_qpu):
     }
 
 
-def run_a1(
+def run_distributed_iqae(
     portfolio: Portfolio,
     *,
     groups: tuple[tuple[int, ...], ...] | None = None,
@@ -204,7 +204,7 @@ def run_a1(
     max_rounds: int = 12,
     seed: int = 1729,
     parallel: bool = False,
-) -> A1Result:
+) -> DistributedIQAEResult:
     """Estimate all targets using independent local circuits, with one QPU per group."""
     if not 0 < epsilon < 0.5 or not 0 < alpha < 1:
         raise ValueError("Require 0 < epsilon < 0.5 and 0 < alpha < 1")
@@ -240,7 +240,7 @@ def run_a1(
     measured = perf_counter()
     estimates, work = zip(*runs, strict=True)
     targets = _aggregate(portfolio, unit, pz[occupied], laws_by_qpu, estimates)
-    return A1Result(
+    return DistributedIQAEResult(
         targets, work, len(occupied), ready - started, measured - ready, perf_counter() - measured
     )
 
@@ -261,7 +261,7 @@ def main():
     groups = (
         None if args.groups is None else tuple(tuple(map(int, group.split(","))) for group in args.groups)
     )
-    result = run_a1(
+    result = run_distributed_iqae(
         adb_portfolio(args.countries, args.scenario),
         groups=groups,
         capacities=args.capacities,
