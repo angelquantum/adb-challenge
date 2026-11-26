@@ -19,6 +19,7 @@ from scipy.linalg import expm
 EARTHQUAKE_STEPS = 5 # 0 to 4
 RAIN_STEPS = 2       # 0 or 1
 ANNUAL_SHAPE = (EARTHQUAKE_STEPS, EARTHQUAKE_STEPS, RAIN_STEPS, RAIN_STEPS) # 100
+N_ANNUAL = int(np.prod(ANNUAL_SHAPE))  # 100
 
 @dataclass
 class Scenario:
@@ -124,10 +125,61 @@ def eq_annual(scenario: str | Scenario) -> np.ndarray:
 # =================================
 #           Precipitation
 # =================================
+def pr_annual(scenario: str | Scenario) -> np.ndarray:
+    """
+    Step 5, eqs. (5)-(6): annual percipitation distribution, shape (2, 2): P[r1, r2]
+    """
+    s = get_scenario(scenario)
+    mu = -np.log(1 - s.pr_annual_prob) * s.pr_m
+    mu1 = mu2 = mu
+    cr = s.pr_cr * min(mu1, mu2)
+    P00 = np.exp(-(mu1 + mu2 - cr))
+    P01 = np.exp(-mu1) - P00
+    P10 = np.exp(-mu2) - P00
+    P11 = 1 - P00 - P01 - P10
+    return np.array([[P00, P01], [P10, P11]])
 
 # =================================
 #         Annual Term states
 # =================================
+def annual_distribution(scenario: str | Scenario) -> np.ndarray:
+    """
+    Step 6: annual joint distribution, shape (5, 5, 2, 2): P[a, b, r1, r2]
+    """
+    return np.einsum("ab,rs->abrs", eq_annual(scenario), pr_annual(scenario))
+
+
+def annual_states() -> np.ndarray:
+    """
+    All 100 states of a year as rows (a, b, r1, r2) in flattened C order
+    """
+    return np.array(np.unravel_index(np.arange(N_ANNUAL), ANNUAL_SHAPE)).T
+
+
+def add_capped(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """
+    Add state arrays (..., 4) and cap at (4, 4, 1, 1)
+    """
+    return np.minimum(x + y, np.array([4, 4, 1, 1]))
+
+
+def term_distribution(scenario: str | Scenario) -> np.ndarray:
+    """
+    Step 7: exact term distribution, shape (5, 5, 2, 2)
+    """
+    s = get_scenario(scenario)
+    annual = annual_distribution(s).ravel()
+    states = annual_states()
+    # transition table: next_idx[i, j] = index of cap(state_i + state_j)
+    summed = add_capped(states[:, None, :], states[None, :, :])
+    next_idx = np.ravel_multi_index(tuple(summed.transpose(2, 0, 1)), ANNUAL_SHAPE)
+    term = np.zeros(N_ANNUAL)
+    term[0] = 1.0 # start at (0, 0, 0, 0)
+    for _ in range(s.years):
+        new = np.zeros(N_ANNUAL)
+        np.add.at(new, next_idx, term[:, None] * annual[None, :])
+        term = new
+    return term.reshape(ANNUAL_SHAPE)
 
 # =================================
 #             Losses
