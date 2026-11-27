@@ -61,3 +61,7 @@ The five targets are expected loss, the probability all bonds pay, the probabili
 ## AI use
 
 AI assisted with the code.
+
+## License
+
+The project's original code is available under the [MIT License](LICENSE). The ADB challenge brief and other third-party materials retain their own terms.
