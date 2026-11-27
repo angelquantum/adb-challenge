@@ -1,20 +1,9 @@
-"""n-country generalisation of the brief's model and its exact (factorised) solver.
+"""Extend the two-country loss model to an arbitrary number of countries.
 
-Each country i keeps its own compound-Poisson earthquake process (rates from its four tail
-probabilities, brief eqs. 2-3) and its own precipitation rate mu_i. One regional earthquake
-stream with rate c = m * mean_i(rho_i * Lambda_i) hits every country at once (independent
-quarter-step sizes per country), and one regional rain stream with rate c_r = share * min_i mu_i
-triggers every country. Each country keeps its total rates (own-only rate = total - shared).
-At n = 2 this is exactly the brief's model (classical/model.py, eqs. 4-6).
-
-Conditional independence: given the number K of regional earthquakes in the term and whether
-the regional rain stream fired (J), the countries are independent. A regional event moves every
-country by at least one quarter step, so K >= 4 exhausts every earthquake sub-limit and K can be
-lumped at 4 without approximation. The joint term law is therefore an exact mixture of
-5 x 2 = 10 product laws over the shock states z = 2K + J. The exact solver and the quantum state
-preparation (circuits.py) both use this structure.
-
-Country outcome over the term: x = 2q + r, q in 0..4 quarter steps, r in {0, 1} rain trigger.
+Countries are independent once we know the number of shared earthquakes and
+whether shared rain occurred. Four shared earthquakes exhaust every earthquake
+sub-limit, so we need only ten shared shock states. Both the exact solver and
+the quantum circuit use this factorization.
 """
 from __future__ import annotations
 
@@ -29,10 +18,10 @@ from scipy.stats import poisson
 from classical import TARGETS as BRIEF_TARGETS
 from classical import Scenario, compound_poisson_rates, get_scenario
 
-K_CAP = 4           # K >= 4 regional quakes exhaust every earthquake sub-limit
-N_SHOCK = 10        # shock states z = 2K + J
-N_OUTCOME = 10      # country outcomes x = 2q + r
-X_EXHAUSTED = 9     # q = 4, r = 1: the country's full principal is lost
+K_CAP = 4  # K >= 4 regional quakes exhaust every earthquake sub-limit
+N_SHOCK = 10  # shock states z = 2K + J
+N_OUTCOME = 10  # country outcomes x = 2q + r
+X_EXHAUSTED = 9  # q = 4, r = 1: the country's full principal is lost
 
 TARGETS = ("expected_loss", "all_pay", "exceedance", "stop_loss", "all_exhausted")
 LABELS = {
@@ -50,9 +39,9 @@ PROBABILITY_TARGETS = ("all_pay", "exceedance", "all_exhausted")
 @dataclass(frozen=True)
 class Country:
     name: str
-    eq_tail: tuple[float, ...]     # annual P(EQ payout >= 25/50/75/100% of the sub-limit)
-    rho: float                     # P(other country triggers | this one triggers), same quake
-    rain_prob: float = 0.02        # annual precipitation trigger probability q
+    eq_tail: tuple[float, ...]  # annual P(EQ payout >= 25/50/75/100% of the sub-limit)
+    rho: float  # P(other country triggers | this one triggers), same quake
+    rain_prob: float = 0.02  # annual precipitation trigger probability q
     eq_limit: float = 70e6
     rain_limit: float = 10e6
 
@@ -64,11 +53,11 @@ class Country:
 @dataclass(frozen=True)
 class Portfolio:
     countries: tuple[Country, ...]
-    eq_m: float = 1.0              # shared earthquake multiplier m (eq. 4)
-    rain_m: float = 1.0            # precipitation rate multiplier
-    rain_share: float = 0.25       # c_r = share * min_i mu_i
+    eq_m: float = 1.0  # shared earthquake multiplier m (eq. 4)
+    rain_m: float = 1.0  # precipitation rate multiplier
+    rain_share: float = 0.25  # c_r = share * min_i mu_i
     years: int = 3
-    threshold: float = 80e6        # T
+    threshold: float = 80e6  # T
 
     @property
     def n(self) -> int:
@@ -104,8 +93,6 @@ def adb_portfolio(n: int, scenario: str | Scenario = "adb-base") -> Portfolio:
                      threshold=s.threshold * n / 2)
 
 
-# ---------------------------------------------------------------- shock-state factorisation
-
 def _own_eq_pmf(lam_own: np.ndarray, years: int) -> np.ndarray:
     """Capped quarter steps (0..4) from the country's own-only compound-Poisson stream."""
     G = np.zeros((5, 5))
@@ -135,7 +122,7 @@ def shock_model(pf: Portfolio) -> tuple[np.ndarray, np.ndarray]:
     pJ = np.array([np.exp(-c_r * Y), -np.expm1(-c_r * Y)])
     pz = np.outer(pK, pJ).ravel()
 
-    cond = np.zeros((pf.n, 5, 2, 5, 2))            # [i, K, J, q, r]
+    cond = np.zeros((pf.n, 5, 2, 5, 2))  # [i, K, J, q, r]
     for i in range(pf.n):
         w = lam[i] / Lam[i]
         eq = [_own_eq_pmf((Lam[i] - c) * w, Y)]
@@ -222,8 +209,6 @@ class PortfolioModel:
             (x == X_EXHAUSTED).all(axis=1),
         ]).astype(float)
 
-
-# ---------------------------------------------------------------- brute force (verification)
 
 def brute_force(pf: Portfolio) -> dict[str, float]:
     """Targets from the full joint chains on 5^n x 2^n states (small n only)."""

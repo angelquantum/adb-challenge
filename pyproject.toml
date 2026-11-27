@@ -1,11 +1,11 @@
 [project]
 name = "adb-challenge"
 version = "0.1.0"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 
 [tool.ruff]
 line-length = 110
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "NPY", "RUF"]
@@ -16,6 +16,5 @@ testpaths = ["tests"]
 pythonpath = ["."]
 
 [tool.ruff.lint.per-file-ignores]
-# printed figure and report text uses typographic minus and multiplication signs on purpose
-"quantum/figures.py" = ["RUF001"]
-"quantum/report.py" = ["RUF001", "E501"]  # long lines are report prose
+# printed figure text uses typographic minus and multiplication signs on purpose
+"benchmarks/figures.py" = ["RUF001"]

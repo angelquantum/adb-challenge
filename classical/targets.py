@@ -48,5 +48,5 @@ def exact_targets(scenario: str | Scenario) -> dict[str, float]:
     """Exact enumeration: mu = sum_x p(x) f(x) over the 100 capped term states."""
     s = get_scenario(scenario)
     p = term_distribution(s).ravel()
-    states = annual_states()          # term states share the annual state grid
+    states = annual_states()  # term states share the annual state grid
     return {name: float(p @ f(states, s)) for name, f in TARGETS.items()}

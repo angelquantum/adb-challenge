@@ -1,9 +1,6 @@
 """Exact (shock-factorised) solver scaling and the cost of P(all exhausted) by method.
 
-python -m quantum.exact_scaling   ->  results/exact_scaling.csv,
-                                          results/exhausted_cost.csv,
-                                          results/figures/f10_exact_scaling.png,
-                                          results/figures/f11_exhausted_cost.png
+python -m benchmarks.exact_scaling   ->  exact scaling and exhaustion cost plots in results/figures/.
 
 Part 1 times exact_targets (all five targets) from 2 to 1000 countries and the brute-force
 joint chain where it is feasible (n <= 5).
@@ -12,24 +9,23 @@ Part 2 compares, for P(all exhausted) at a 95% CI half-width of 1% of the value:
     Monte Carlo  paths N = (1 - p) / (p (eps/1.96)^2); time = N x measured cost per path
     IQAE         oracle queries from the ideal-device IQAE run; time = sum over rounds of
                  shots x circuit depth (A then Q^k) x LAYER_S, i.e. an idealised
-                 fault-tolerant device that executes one circuit layer per LAYER_S seconds.
+                 logical device that executes one circuit layer per LAYER_S seconds.
 """
 from __future__ import annotations
 
-import csv
 import time
 from pathlib import Path
 
 import matplotlib
 import numpy as np
 
-from .baselines import monte_carlo
-from .circuits import gate_counts, grover_operator, oracle
-from .iqae import GroverModel, iqae
-from .portfolio import PortfolioModel, adb_portfolio, brute_force, exact_targets
+from quantum.baselines import monte_carlo
+from quantum.circuits import gate_counts, grover_operator, oracle
+from quantum.iqae import GroverModel, iqae
+from quantum.portfolio import PortfolioModel, adb_portfolio, brute_force, exact_targets
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.pyplot as plt
 
 RES = Path(__file__).resolve().parents[1] / "results"
 FIG = RES / "figures"
@@ -66,7 +62,7 @@ def exhausted_cost() -> list[dict]:
         p = exact_targets(pf)["all_exhausted"]
         t_ex = _time(lambda pf=pf: exact_targets(pf)["all_exhausted"], 20)
         n_paths = 1_000_000
-        per_path = _time(lambda m=m: monte_carlo(m, n_paths, np.random.default_rng(0)), 1) / n_paths
+        per_path = _time(lambda m=m, n=n_paths: monte_carlo(m, n, np.random.default_rng(0)), 1) / n_paths
         mc_paths = (1 - p) / (p * (EPS / Z95) ** 2)
         r = iqae(GroverModel(p), EPS * p, alpha=ALPHA, shots=SHOTS, rng=0)
         A = oracle(m, "all_exhausted", "scalable")
@@ -100,17 +96,9 @@ def _col(rows: list[dict], key: str) -> np.ndarray:
     return np.array([r[key] for r in rows], dtype=float)
 
 
-def _write(rows: list[dict], path: Path) -> None:
-    with path.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0]))
-        w.writeheader()
-        w.writerows(rows)
-
-
 def figures(sc: list[dict], ec: list[dict]) -> None:
     plt.rcParams.update({"font.size": 10, "axes.edgecolor": INK2, "axes.labelcolor": INK,
                          "xtick.color": INK2, "ytick.color": INK2})
-    # f10: exact solver scaling
     fig, ax = plt.subplots(figsize=(7, 4.6))
     n, t_ex, t_bf = _col(sc, "n"), _col(sc, "t_exact_s"), _col(sc, "t_brute_s")
     _line(ax, n, t_ex, AQUA, "factorised exact solver (measured)", "factorised")
@@ -122,13 +110,12 @@ def figures(sc: list[dict], ec: list[dict]) -> None:
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlim(1.5, 2500)
-    _style(ax, "Exact computation of all five targets: wall-clock time", "seconds")
+    _style(ax, "Exact solver runtime for all five targets by country count", "seconds")
     ax.legend(frameon=False, fontsize=8, loc="lower right")
     fig.tight_layout()
-    fig.savefig(FIG / "f10_exact_scaling.png", dpi=200)
+    fig.savefig(FIG / "exact_scaling.png", dpi=200)
     plt.close(fig)
 
-    # f11: P(all exhausted), queries and time
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(12, 4.8))
     n = _col(ec, "n")
     _line(a1, n, _col(ec, "mc_paths"), ORANGE, "Monte Carlo paths", "Monte Carlo")
@@ -136,7 +123,7 @@ def figures(sc: list[dict], ec: list[dict]) -> None:
     _line(a1, n, np.ones_like(n), AQUA, "Exact: 1 formula evaluation", "Exact")
     _style(a1, "Samples / queries to reach ±1% (95% CI)", "samples / queries")
     _line(a2, n, _col(ec, "mc_time_s"), ORANGE, "Monte Carlo (measured rate, laptop)", "Monte Carlo")
-    _line(a2, n, _col(ec, "iqae_time_s"), BLUE, "IQAE (ideal FT device, 1 µs/layer)", "IQAE", "--")
+    _line(a2, n, _col(ec, "iqae_time_s"), BLUE, "IQAE (assumed 1 µs/layer)", "IQAE", "--")
     _line(a2, n, _col(ec, "t_exact_s"), AQUA, "Exact (measured)", "Exact")
     _style(a2, "Wall-clock time to reach ±1% (95% CI)", "seconds")
     for yv, lab in ((1, "1 s"), (3600, "1 hour"), (86400 * 365, "1 year")):
@@ -148,8 +135,9 @@ def figures(sc: list[dict], ec: list[dict]) -> None:
         ax.set_xlim(1, 27)
     a1.legend(frameon=False, fontsize=8, loc="center right", bbox_to_anchor=(1, 0.3))
     a2.legend(frameon=False, fontsize=8, loc="center right", bbox_to_anchor=(1, 0.43))
-    fig.tight_layout()
-    fig.savefig(FIG / "f11_exhausted_cost.png", dpi=200)
+    fig.suptitle("Cost of estimating the probability that all bonds are exhausted")
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
+    fig.savefig(FIG / "exhaustion_cost.png", dpi=200)
     plt.close(fig)
 
 
@@ -157,12 +145,10 @@ def main() -> None:
     FIG.mkdir(parents=True, exist_ok=True)
     print("exact solver scaling")
     sc = scaling()
-    _write(sc, RES / "exact_scaling.csv")
     print("P(all exhausted): exact vs Monte Carlo vs IQAE")
     ec = exhausted_cost()
-    _write(ec, RES / "exhausted_cost.csv")
     figures(sc, ec)
-    print(f"wrote {RES / 'exact_scaling.csv'}, {RES / 'exhausted_cost.csv'}, f10 and f11 figures")
+    print(f"wrote scaling and exhaustion cost plots to {FIG}")
 
 
 if __name__ == "__main__":

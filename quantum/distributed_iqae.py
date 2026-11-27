@@ -9,10 +9,16 @@ from dataclasses import asdict, dataclass
 from time import perf_counter
 
 import numpy as np
-from qiskit import QuantumCircuit, QuantumRegister
-from qiskit.circuit.library import UCRYGate
 
-from .circuits import CircuitSampler, _cascade, grover_operator
+from .circuits import (
+    DEFAULT_DEVICE,
+    DEVICES,
+    Circuit,
+    CircuitSampler,
+    _cascade,
+    grover_operator,
+    multiplexed_ry,
+)
 from .iqae import iqae
 from .portfolio import (
     N_OUTCOME,
@@ -105,17 +111,29 @@ def _tasks(law):
         yield law.losses <= cutoff
 
 
-def _run_group(laws, epsilon, alpha, shots, max_rounds, seed):
+def _local_preparation(law):
+    wires = range(law.qubits - 1)
+    mass = np.zeros(1 << len(wires))
+    mass[:len(law.probabilities)] = law.probabilities / law.probabilities.sum()
+    ops = []
+    _cascade(ops, [], wires, mass[None, :])
+    return ops
+
+
+def _local_oracle(law, values, prep):
+    obj = law.qubits - 1
+    angles = np.zeros(1 << obj)
+    angles[:len(values)] = 2 * np.arcsin(np.sqrt(values))
+    ops = (*prep, *multiplexed_ry(angles, range(obj), obj))
+    return Circuit(ops, law.qubits, obj)
+
+
+def _run_group(laws, epsilon, alpha, shots, max_rounds, seed, device):
     rng = np.random.default_rng(seed)
     estimates = []
     paid_tasks = total_shots = queries = 0
     for law in laws:
-        data = QuantumRegister(law.qubits - 1, "country")
-        obj = QuantumRegister(1, "obj")
-        prep = QuantumCircuit(data, obj)
-        mass = np.zeros(1 << len(data))
-        mass[: len(law.probabilities)] = law.probabilities / law.probabilities.sum()
-        _cascade(prep, [], list(data), mass[None, :])
+        prep = _local_preparation(law)
         active = law.probabilities > 0
         row = []
         for values in _tasks(law):
@@ -124,14 +142,11 @@ def _run_group(laws, epsilon, alpha, shots, max_rounds, seed):
                 value = float(possible[0])
                 row.append(Estimate(value, value, value))
                 continue
-            angles = np.zeros_like(mass)
-            angles[: len(values)] = 2 * np.arcsin(np.sqrt(values))
-            circuit = prep.copy()
-            circuit.append(UCRYGate(angles.tolist()), [obj[0], *data])
-            sampler = CircuitSampler(circuit, grover_operator(circuit, aux=0), chunk=4)
+            circuit = _local_oracle(law, values, prep)
+            sampler = CircuitSampler(circuit, grover_operator(circuit, aux=0), chunk=4, device=device)
             fitted = iqae(sampler, epsilon, alpha=alpha, shots=shots, rng=rng, max_rounds=max_rounds)
             lo, hi = fitted.ci
-            # The existing controller collapses its interval on inversion failure.
+            # Restore a conservative interval if IQAE returned a point.
             if hi <= lo:
                 lo, hi = 0.0, 1.0
             row.append(Estimate(float(fitted.estimate), lo, hi))
@@ -204,6 +219,7 @@ def run_distributed_iqae(
     max_rounds: int = 12,
     seed: int = 1729,
     parallel: bool = False,
+    device: str = DEFAULT_DEVICE,
 ) -> DistributedIQAEResult:
     """Estimate all targets using independent local circuits, with one QPU per group."""
     if not 0 < epsilon < 0.5 or not 0 < alpha < 1:
@@ -221,15 +237,14 @@ def run_distributed_iqae(
         for group, width in zip(assignment, widths, strict=True)
     ]
     max_tasks = sum(len(law.support) + 2 for laws in laws_by_qpu for law in laws)
-    # Union bound over tasks and possible pooled block starts and lengths.
-    # The existing controller further divides this alpha internally.
+    # Split the error budget across tasks and possible blocks of pooled rounds.
     local_alpha = alpha / (max_tasks * max_rounds * (max_rounds + 1) / 2)
     seeds = np.random.SeedSequence(seed).spawn(len(assignment))
     ready = perf_counter()
 
     def run_device(job):
         laws, child_seed = job
-        return _run_group(laws, epsilon, local_alpha, shots, max_rounds, child_seed)
+        return _run_group(laws, epsilon, local_alpha, shots, max_rounds, child_seed, device)
 
     jobs = list(zip(laws_by_qpu, seeds, strict=True))
     if parallel:
@@ -257,6 +272,7 @@ def main():
     parser.add_argument("--max-rounds", type=int, default=12)
     parser.add_argument("--seed", type=int, default=1729)
     parser.add_argument("--parallel", action="store_true")
+    parser.add_argument("--device", choices=DEVICES, default=DEFAULT_DEVICE)
     args = parser.parse_args()
     groups = (
         None if args.groups is None else tuple(tuple(map(int, group.split(","))) for group in args.groups)
@@ -271,6 +287,7 @@ def main():
         max_rounds=args.max_rounds,
         seed=args.seed,
         parallel=args.parallel,
+        device=args.device,
     )
     print(json.dumps(asdict(result), indent=2))
 

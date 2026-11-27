@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="482" viewBox="0 0 900 482"
+     role="img" aria-labelledby="title description">
+  <title id="title">Distributed IQAE circuit</title>
+  <desc id="description">A classical coordinator conditions on a shared shock and sends local distributions to two quantum processors. Each runs its local circuit. A classical aggregation step combines the results.</desc>
+  <style>
+    text { font-family: system-ui, sans-serif; fill: #172337; }
+    .heading { font-size: 24px; font-weight: 700; }
+    .strong { font-size: 17px; font-weight: 650; }
+    .label { font-size: 14px; }
+    .center { text-anchor: middle; }
+    .wire { stroke: #536883; stroke-width: 1.6; fill: none; }
+    .flow { stroke: #536883; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#536883"/>
+    </marker>
+    <g id="local-circuit">
+      <path d="M79 0H317 M79 17H317 M79 34H317 M79 51H317 M79 80H317" class="wire"/>
+      <text x="0" y="30" class="label">4 data wires</text>
+      <text x="0" y="85" class="label">Objective</text>
+      <rect x="101" y="-8" width="82" height="68" rx="7" fill="#dcecff" stroke="#3066a3"/>
+      <text x="142" y="30" class="strong center">Load</text>
+      <rect x="201" y="-8" width="100" height="97" rx="7" fill="#ebe3fa" stroke="#7053a2"/>
+      <text x="251" y="45" class="strong center">Local IQAE</text>
+    </g>
+  </defs>
+  <rect x="1" y="1" width="898" height="480" rx="16" fill="#fff" stroke="#cad5e2" stroke-width="2"/>
+  <text x="32" y="48" class="heading">Distributed IQAE circuit</text>
+
+  <rect x="219" y="74" width="462" height="69" rx="10" fill="#ebeff4" stroke="#536883"/>
+  <text x="450" y="101" class="strong center">Classical coordinator</text>
+  <text x="450" y="124" class="label center">Compute shared shock weights and conditional payout distributions</text>
+  <path d="M450 143v17" class="wire"/>
+  <path d="M450 160H218v43" class="flow"/>
+  <path d="M450 160H682v43" class="flow"/>
+  <text x="229" y="188" class="label">P(x₁ | z)</text>
+  <text x="694" y="188" class="label">P(x₂ | z)</text>
+
+  <rect x="32" y="206" width="373" height="160" rx="10" fill="#f7faff" stroke="#90a9c8"/>
+  <rect x="495" y="206" width="373" height="160" rx="10" fill="#f7faff" stroke="#90a9c8"/>
+  <text x="49" y="236" class="strong">QPU 1 · Kyrgyz Republic</text>
+  <text x="512" y="236" class="strong">QPU 2 · Tajikistan</text>
+  <use href="#local-circuit" x="49" y="260"/>
+  <use href="#local-circuit" x="512" y="260"/>
+
+  <path d="M218 367v20h232v24 M682 367v20H450" class="wire"/>
+  <path d="M450 387v24" class="flow"/>
+  <text x="229" y="382" class="label">Local estimates</text>
+  <text x="568" y="382" class="label">Local estimates</text>
+
+  <rect x="219" y="413" width="462" height="48" rx="10" fill="#d9f2eb" stroke="#28796b"/>
+  <text x="450" y="443" class="strong center">Classical aggregation → five portfolio estimates</text>
+</svg>

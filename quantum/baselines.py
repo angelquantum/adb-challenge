@@ -1,17 +1,8 @@
-"""Classical sampling baselines on n countries (generalise classical/sampling.py).
+"""Classical sampling methods for portfolios of any size.
 
-A path is an exact draw of the term law: the shock state z = (K, J), then one outcome x_i per
-country from cond[i, z]. Cost O(n) per path.
-
-    monte_carlo  inverse CDF with i.i.d. uniforms
-    sobol        same map with scrambled Sobol points in n + 1 dimensions, 8 scrambles,
-                 t-interval on 7 degrees of freedom
-    stratified   strata = the 10 shock states, equal allocation, exact weights P(z). This is
-                 the n-country analogue of the brief's "first payout year" strata and the
-                 strongest classical method on joint tails here, because it removes all of
-                 the cross-country dependence
-    importance   50/50 mixture of the true law and its loss-tilted version, applied to the
-                 shock state and to every country (the brief's tilt, per component)
+Each path draws a shared shock, then one payout outcome per country. Monte
+Carlo and Sobol use the same inverse CDF. Stratified sampling allocates paths
+by shock state, and importance sampling adds a loss-tilted proposal.
 """
 from __future__ import annotations
 
@@ -104,7 +95,7 @@ def _tilted(p: np.ndarray, loss: np.ndarray) -> np.ndarray:
 
 
 def importance(m: PortfolioModel, N: int, rng: np.random.Generator) -> Batch:
-    el_z = (m.cond * m.loss[:, None, :]).sum(-1).sum(0)          # E[L | z]
+    el_z = (m.cond * m.loss[:, None, :]).sum(-1).sum(0)  # E[L | z]
     qz = _tilted(m.pz, el_z)
     qx = _tilted(m.cond, m.loss[:, None, :])
     rz = np.divide(m.pz, qz, out=np.zeros_like(qz), where=qz > 0)

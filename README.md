@@ -1,169 +1,63 @@
-# ADB Quantum Challenge — Joint-Loss Modelling for Natural Catastrophe Risk
+# AngelQ-ADB Quantum Challenge Submission — Efficient Quantum Amplitude Estimation for Joint Catastrophe-Bond Risk
+This Phase 1 prototype reproduces Table 5 of the challenge brief for the two-country portfolio. It compares exact classical computation, four classical samplers, and noiseless IQAE simulations. The experiments extend the portfolio to 3, 5, and 10 countries by alternating Kyrgyz-like and Tajik-like parameters. The exact solver and the circuits both use conditional independence given shared earthquake and rainfall events.
 
-This repository is our Phase 1 prototype. It does three things:
+## Setup
 
-1. **Reproduces the brief exactly.** Table 5 (all five scenarios, all five targets) comes out of an exact classical solver, alongside the classical sampling baselines.
-2. **Estimates the same targets with Iterative Quantum Amplitude Estimation (IQAE)**, simulated on Qiskit, and reports the quantum resources it needs (qubits, depth, two-qubit gates, shots).
-3. **Scales the problem beyond two countries** (3, 5 and 10) to show where IQAE wins against classical sampling, and where it doesn't.
-
-Everything below runs on a laptop. Apart from the full benchmark, each step finishes in seconds.
-
----
-
-## 1. Set up
-
-You need Python 3.11 or newer. Run every command from the repository root.
+Run the commands below from the repository root with Python 3.12.
 
 ```bash
-git clone https://github.com/angelquantum/adb-challenge.git
-cd adb-challenge
 python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m pytest
 ```
 
-Check that everything works:
+On Windows PowerShell, activate with `.venv\Scripts\Activate.ps1`.
 
-```bash
-pytest
-```
+## Run the estimators
 
-All 66 tests should pass in about 30 seconds. Among other things, they check that our code reproduces Table 5, that the quantum circuits load the exact probabilities, and that IQAE's confidence intervals hold.
-
----
-
-## 2. Reproduce Table 5 of the brief
+### Classical reference and sampling
 
 ```bash
 python -m classical
+python -m classical --scenario adb-rain-stress --n 131072
 ```
 
-This takes about one second. The first block it prints is Table 5:
+Both commands print the exact Table 5 values for all five scenarios, then estimates from Monte Carlo, scrambled Sobol, stratified, and importance sampling. Each estimate includes a 95% confidence half-width and relative error. The first run samples the base scenario with 65,536 paths per method. The second samples the rain-stress scenario with 131,072 paths per method.
 
-```
-scenario                   EL (USD)         Both pay            L > T  Stop-loss (USD)   Both exhausted
-adb-base                 10,063,513          4.4138%          1.2047%          282,355          0.0032%
-adb-independent          10,063,513          2.7156%          0.7186%          171,266          0.0004%
-adb-common-shock         10,063,513          5.0526%          1.6066%          385,043          0.0044%
-adb-rain-stress          11,170,506          7.0464%          1.3215%          306,286          0.0069%
-adb-rain-cover            9,970,051          4.4138%          0.6997%          170,927          0.0032%
-```
-
-Below it, the four classical baselines from the brief (Monte Carlo, scrambled Sobol, stratified and importance sampling) estimate the same targets. Each estimate comes with a 95% confidence interval and its error against the exact value. Note how all of them struggle with "both bonds exhausted", the 3-in-100,000 event.
-
-Try another scenario or sample size with `python -m classical --scenario adb-rain-stress --n 100000`.
-
----
-
-## 3. Run the quantum estimator
+### Monolithic IQAE
 
 ```bash
 python -m quantum --n 2
+python -m quantum --n 2 --backend lightning.qubit --target all_pay --eps 0.05
 ```
 
-This takes about two seconds. For each of the five targets, it prints the exact value, the IQAE estimate with its confidence interval, the number of oracle calls it took, and the size of the circuit. Where it applies, it also prints how many Monte Carlo samples would be needed for the same accuracy. For example:
+Here `--n` sets the number of countries. The default `oracle` backend draws shots from ideal circuit probabilities. For up to three countries, use `lightning.qubit` or `default.qubit` to simulate the PennyLane circuit. Add `--shots-mode` for finite-shot circuit execution. `--eps` sets the target relative confidence-interval half-width, so `0.05` requests ±5%. The first command prints results for all five targets. The second reports only the probability that both bonds pay, whose exact base-case value is about 4.41%. Each result includes the estimate, confidence interval, oracle calls, shots, and circuit size.
 
-```
-P(all exhausted)  (all_exhausted)
-  exact      3.1633e-05
-  IQAE       3.15795e-05   CI [3.14765e-05, 3.16826e-05]   error -0.169%
-  cost       2,132,300 oracle calls, ...   (Monte Carlo, same 95% half-width: ~1.3e+09 paths)
-```
+![Monolithic IQAE circuit showing probability loading, objective encoding, Grover iterations, and flag measurement](iqae-circuit.svg)
 
-Your IQAE numbers will differ slightly from run to run, because each run draws new random shots.
-
-By default this uses the **oracle backend**: it samples measurement outcomes from the exact statistics of the ideal circuit, so it is fast at any size. To run the **actual Qiskit circuits** on the Aer simulator instead (up to 3 countries):
-
-```bash
-python -m quantum --n 2 --backend aer --target all_pay --eps 0.05
-```
-
-This takes about 10 seconds. A tighter `--eps` or `--target all` also works, but takes 10+ minutes.
-
-Useful options:
-
-| Option | What it does | Default |
-|---|---|---|
-| `--n` | number of countries | 2 |
-| `--scenario` | any scenario from Table 5 | `adb-base` |
-| `--target` | `expected_loss`, `all_pay`, `exceedance`, `stop_loss`, `all_exhausted`, or `all` | `all` |
-| `--eps` | target accuracy, as a fraction of the value (0.01 = ±1%) | 0.01 |
-| `--alpha` | 1 − confidence level | 0.05 |
-| `--backend` | `oracle` (fast) or `aer` (real circuits, n ≤ 3) | `oracle` |
-| `--seed` | fix the random seed for a repeatable run | none |
-
-### More than two countries
-
-The brief notes that exact enumeration blows up as countries are added (10ⁿ states). We extend the model to *n* countries by alternating the Kyrgyz-like and Tajik-like parameters, with one regional earthquake stream and one regional rain stream. At n = 2 it is exactly the brief's model.
-
-Once you condition on the shared regional events, the countries are independent. This makes exact answers cheap at any size, which lets us check every quantum estimate against the truth. It is also how the quantum circuit loads the distribution.
-
-```bash
-python -m quantum --n 10 --target exceedance
-```
-
----
-
-## 4. Distributed IQAE
-
-Instead of one large circuit, each country (or group of countries) runs its own small circuit, as if on a separate small quantum processor. A classical computer then combines the results. With two countries, each processor needs only 5 qubits.
+### Distributed IQAE
 
 ```bash
 python -m quantum.distributed_iqae --capacities 5 6
+python -m quantum.distributed_iqae --countries 3 --groups 0,1 2
 ```
 
-This takes about five seconds and prints JSON with the five estimates, their intervals, and the shots and timings for each processor. To split three countries across two processors, use `--countries 3 --groups 0,1 2`.
+Each country group runs its own local circuits, and a classical coordinator combines the results. Groups use zero-based country indices. Lightning is the default simulator. Pass `--device default.qubit` to switch. Both commands print JSON with all five estimates, their intervals, per-group resource counts, and timings. The first assigns one country to each of two simulated processors. The second assigns countries 0 and 1 to one processor and country 2 to the other.
 
----
+![Distributed IQAE circuit showing a classical coordinator, two local circuits, and classical aggregation](distributed-iqae-circuit.svg)
 
-## 5. Regenerate the full benchmark
-
-The files in `results/` are the ones our report is based on. To regenerate them:
+## Regenerate the plots
 
 ```bash
-python -m quantum.benchmark                  # about 1 hour on 12 cores; set --workers to your core count
-python -m quantum.exact_scaling              # a few minutes
-python -m quantum.distributed_benchmark      # distributed vs. single-circuit IQAE vs. classical
-python -m quantum.report                     # figures and docs/IQAE_benchmark_and_limits_2-10_countries.pdf
+python -m benchmarks.benchmark --quick --workers 4
+python -m benchmarks.exact_scaling
 ```
 
-To check the pipeline end to end before committing an hour, run `python -m quantum.benchmark --quick` first.
+Omit `--quick` for the full benchmark with more replications. The first command prints benchmark progress and saves nine PNGs comparing estimation accuracy, circuit costs, and runtimes. The second prints solver timings and rare-event costs, and saves `exact_scaling.png` and `exhaustion_cost.png`. All plots go to [results/figures](results/figures/). Start with [accuracy by computational work](results/figures/iqae_accuracy.png), [IQAE cost advantage](results/figures/iqae_advantage.png), [distributed runtime](results/figures/distributed_runtime.png), and [exact solver scaling](results/figures/exact_scaling.png).
 
-| File in `results/` | What it holds |
-|---|---|
-| `BENCHMARK.md` | Summary tables. **Start here.** |
-| `exact.csv` | Exact values for 2, 3, 5 and 10 countries, checked by brute force up to 5 |
-| `classical.csv`, `iqae.csv` | Accuracy vs. cost for every classical method and for IQAE |
-| `counts.csv` | Qubits, depth, two-qubit gates and T gates for each circuit |
-| `noise.csv`, `noisy_circuit.csv` | How IQAE degrades under hardware noise |
-| `tradeoff.csv` | Circuit depth vs. number of queries |
-| `validation.csv`, `e2e.csv` | The real Qiskit circuits checked against exact values on Aer |
-| `distributed.csv` | Distributed IQAE results |
-| `exact_scaling.csv`, `exhausted_cost.csv` | How the exact solver and each method scale |
-| `figures/` | All plots used in the report |
-
----
-
-## Where the brief's Phase 1 deliverables are
-
-| The brief asks for | Where to find it |
-|---|---|
-| Exact reference values (Table 5) | Section 2; [classical/](classical/) |
-| Classical baselines | `python -m classical`; `results/classical.csv` |
-| Quantum estimates | Sections 3 and 4; `results/iqae.csv`, `results/distributed.csv` |
-| Resource estimation (qubits, depth, two-qubit gates, shots) | printed by `python -m quantum`; `results/counts.csv`; fault-tolerant estimate in [quantum/resources.py](quantum/resources.py) |
-| Scaling to larger portfolios | `results/BENCHMARK.md`, `results/exact_scaling.csv` |
-
-## Environment
-
-| | |
-|---|---|
-| Hardware | Laptop, Intel Core i5-1135G7 (4 cores / 8 threads), 32 GB RAM. No GPU and no quantum hardware was used. |
-| OS | Ubuntu Linux |
-| Python | 3.12.3 |
-| Quantum stack | Qiskit 2.6.2, Qiskit Aer 0.18.4 (statevector simulator), qiskit-algorithms 0.4.0 (cross-check only) |
-| Exact pinned versions | [requirements.txt](requirements.txt) |
+The five targets are expected loss, the probability all bonds pay, the probability loss exceeds the threshold, expected excess loss above the threshold (stop-loss), and the probability all bonds are exhausted. The advantage plot divides classical paths by IQAE oracle calls at the same relative RMSE. The runtime plots give a separate comparison in seconds, using modeled quantum runtimes.
 
 ## AI use
 
-**TODO — describe how AI tools were used (the brief requires this).**
+AI assisted with the code.

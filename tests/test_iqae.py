@@ -1,4 +1,4 @@
-"""Tests for quantum: n-country model, n-country baselines, IQAE and the Qiskit oracles."""
+"""Tests for quantum: n-country model, n-country baselines, IQAE and the PennyLane oracles."""
 import numpy as np
 import pytest
 
@@ -16,7 +16,7 @@ from quantum.portfolio import (
     loss_distribution,
     shock_model,
 )
-from quantum.resources import ft_estimate
+from quantum.resources import logical_estimate
 
 
 @pytest.mark.parametrize("sc", list(SCENARIOS))
@@ -62,7 +62,6 @@ def test_estimate_api_matches_classical_shape():
 def test_hit_probability_limits():
     th = 0.3
     assert hit_probability(th, 3) == pytest.approx(np.sin(7 * th) ** 2)
-    assert hit_probability(th, 3, noise=50.0) == pytest.approx(0.5)
 
 
 def test_clopper_pearson_brackets_the_rate():
@@ -81,22 +80,17 @@ def test_iqae_accuracy_and_coverage(a):
 
 
 def test_iqae_beats_monte_carlo_scaling():
-    # query cost grows ~ 1/eps (Heisenberg), not 1/eps^2: 10x smaller eps -> < 20x more queries
+    # Reducing epsilon tenfold should cost less than twenty times as many queries.
     a, rng = 0.01, np.random.default_rng(0)
     q = [np.mean([iqae(GroverModel(a), e * a, alpha=0.01, rng=rng).queries for _ in range(50)])
          for e in (0.1, 0.01)]
     assert q[1] / q[0] < 20
 
 
-def test_ft_estimate_monotone():
-    a = ft_estimate(30, 100, 500, 200, 1000, 1e5, 100)
-    b = ft_estimate(30, 100, 500, 200, 1000, 1e7, 10000)
-    assert b["T_total"] > a["T_total"] and b["code_distance"] >= a["code_distance"]
-
-
-# ---------------------------------------------------------------- circuits (Qiskit Aer)
-
-qiskit_aer = pytest.importorskip("qiskit_aer")
+def test_logical_estimate_monotone():
+    a = logical_estimate(30, 100, 500, 200, 1000, 1e5, 100)
+    b = logical_estimate(30, 100, 500, 200, 1000, 1e7, 10000)
+    assert b["T_total"] > a["T_total"] and b["T_deepest_circuit"] > a["T_deepest_circuit"]
 
 
 @pytest.mark.parametrize("kind", ["scalable", "lookup"])
@@ -121,11 +115,13 @@ def test_grover_statistics_on_the_circuit():
         assert cs.probability(j) == pytest.approx(np.sin((2 * j + 1) * theta) ** 2, abs=1e-9)
 
 
-def test_end_to_end_iqae_on_aer():
+@pytest.mark.parametrize("device", ["lightning.qubit", "default.qubit"])
+def test_end_to_end_iqae_on_pennylane(device):
     from quantum.circuits import CircuitSampler, oracle
 
     m = PortfolioModel(adb_portfolio(2))
     k = TARGETS.index("all_pay")
     a = m.amplitude(k)
-    r = iqae(CircuitSampler(oracle(m, "all_pay", "lookup"), mode="shots"), 0.1 * a, alpha=0.05, rng=1)
+    sampler = CircuitSampler(oracle(m, "all_pay", "lookup"), mode="shots", device=device)
+    r = iqae(sampler, 0.1 * a, alpha=0.05, rng=1)
     assert r.ci[0] <= a <= r.ci[1]

@@ -9,13 +9,11 @@ when the interval for a has half-width <= epsilon, which gives a rigorous 1 - al
 
 The algorithm only sees hit counts, so the backend is pluggable (a Sampler):
 
-    GroverModel(a, noise)      exact statistics of the ideal circuit ("oracle level"), with
-                               optional global depolarising noise per oracle call
-    circuits.CircuitSampler    the actual Qiskit circuits, simulated with Qiskit Aer
+    GroverModel(a)             exact statistics of the ideal circuit ("oracle level")
+    circuits.CircuitSampler    PennyLane circuits on a noiseless qubit simulator
 
 Cost accounting: a round at Grover power k with N shots costs N (2k + 1) oracle calls
-(applications of A or A^dagger). k_max, the deepest circuit, sets the coherence and
-error-correction requirement.
+(applications of A or A^dagger). k_max, the deepest circuit, sets the coherence requirement.
 """
 from __future__ import annotations
 
@@ -32,35 +30,29 @@ class Sampler(Protocol):
         ...
 
 
-def hit_probability(theta: float, k, noise: float = 0.0):
-    """P(objective = 1) after Q^k A with global depolarising rate `noise` per oracle call.
-
-    P = d sin^2((2k+1) theta) + (1 - d) / 2,  d = exp(-noise (2k + 1)).
-    """
-    f = 2 * np.asarray(k) + 1
-    d = np.exp(-noise * f)
-    return d * np.sin(f * theta) ** 2 + (1 - d) / 2
+def hit_probability(theta: float, k):
+    """P(objective = 1) after Q^k A in the ideal circuit."""
+    return np.sin((2 * np.asarray(k) + 1) * theta) ** 2
 
 
 @dataclass(frozen=True)
 class GroverModel:
     """Oracle-level backend: draws hits from the exact Grover statistics of amplitude a."""
     a: float
-    noise: float = 0.0
 
     def __call__(self, k: int, shots: int, rng: np.random.Generator) -> int:
         theta = np.arcsin(np.sqrt(self.a))
-        return int(rng.binomial(shots, hit_probability(theta, k, self.noise)))
+        return int(rng.binomial(shots, hit_probability(theta, k)))
 
 
 @dataclass(frozen=True)
 class IQAEResult:
     estimate: float
     ci: tuple[float, float]
-    queries: int                    # oracle calls (A or A^dagger)
-    shots: int                      # circuit executions
-    k_max: int                      # deepest Grover power in a single circuit
-    powers: tuple[int, ...] = field(repr=False)   # Grover power of every round
+    queries: int  # oracle calls (A or A^dagger)
+    shots: int  # circuit executions
+    k_max: int  # deepest Grover power in a single circuit
+    powers: tuple[int, ...] = field(repr=False)  # Grover power of every round
 
     @property
     def rounds(self) -> int:
@@ -81,7 +73,7 @@ def _next_power(k: int, th_lo: float, th_hi: float, up: bool, min_ratio: float =
     Same answer as Grinko et al.'s loop over K = K_max, K_max - 4, ..., but searched over the
     half-period index m instead: for each m the valid K form the interval
     [m pi / th_lo, (m + 1) pi / th_hi], scanned from the top. The K loop needs ~pi / (4 width)
-    steps when k cannot grow (e.g. under noise); this needs a handful.
+    steps when k cannot grow; this needs a handful.
     """
     w = th_hi - th_lo
     K_min = min_ratio * (4 * k + 2)
@@ -133,7 +125,7 @@ def iqae(sampler: Sampler, epsilon: float, alpha: float = 0.05, shots: int = 100
             phi_lo, phi_hi = 2 * np.pi - np.arccos(1 - 2 * a_hi), 2 * np.pi - np.arccos(1 - 2 * a_lo)
         base = 2 * np.pi * np.floor(K * th_lo / (2 * np.pi))
         th_lo, th_hi = max(th_lo, (base + phi_lo) / K), min(th_hi, (base + phi_hi) / K)
-        if th_lo > th_hi:        # interval miss (probability <= alpha): collapse and stop
+        if th_lo > th_hi:  # interval miss (probability <= alpha): collapse and stop
             th_lo = th_hi = 0.5 * (th_lo + th_hi)
             break
     lo, hi = float(np.sin(th_lo) ** 2), float(np.sin(th_hi) ** 2)

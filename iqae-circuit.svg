@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="372" viewBox="0 0 900 372"
+     role="img" aria-labelledby="title description">
+  <title id="title">Monolithic IQAE circuit</title>
+  <desc id="description">Prepare the state and encode the target on the objective wire. Apply the Grover step k times, then measure the objective qubit.</desc>
+  <style>
+    text { font-family: system-ui, sans-serif; fill: #172337; }
+    .heading { font-size: 24px; font-weight: 700; }
+    .label { font-size: 15px; }
+    .gate { font-size: 22px; font-weight: 650; text-anchor: middle; }
+    .detail { font-size: 13px; text-anchor: middle; }
+    .wire { stroke: #536883; stroke-width: 1.7; fill: none; }
+  </style>
+  <rect x="1" y="1" width="898" height="370" rx="16" fill="#fff" stroke="#cad5e2" stroke-width="2"/>
+  <text x="32" y="48" class="heading">Monolithic IQAE circuit</text>
+  <text x="32" y="74" class="label">One circuit execution at Grover power k</text>
+
+  <g class="wire">
+    <path d="M112 132H862 M112 162H862 M112 192H862 M112 222H862 M112 272H862"/>
+  </g>
+  <g class="label">
+    <text x="33" y="137">q₀</text>
+    <text x="33" y="167">q₁</text>
+    <text x="33" y="197">⋮</text>
+    <text x="33" y="227">qₘ₋₁</text>
+    <text x="33" y="277">Objective</text>
+  </g>
+
+  <rect x="136" y="112" width="108" height="129" rx="8" fill="#dcecff" stroke="#3066a3"/>
+  <text x="190" y="171" class="gate">Uₚ</text>
+  <text x="190" y="197" class="detail">Load state</text>
+
+  <rect x="261" y="112" width="108" height="180" rx="8" fill="#d9f2eb" stroke="#28796b"/>
+  <text x="315" y="195" class="gate">Vƒ</text>
+  <text x="315" y="221" class="detail">Encode target</text>
+
+  <g fill="#ebe3fa" stroke="#7053a2">
+    <rect x="394" y="252" width="45" height="40" rx="7"/>
+    <rect x="457" y="112" width="84" height="180" rx="8"/>
+    <rect x="557" y="112" width="84" height="180" rx="8"/>
+    <rect x="657" y="112" width="84" height="180" rx="8"/>
+  </g>
+  <text x="416.5" y="280" class="gate">Z</text>
+  <text x="499" y="208" class="gate">A†</text>
+  <text x="599" y="208" class="gate">S₀</text>
+  <text x="699" y="208" class="gate">A</text>
+
+  <rect x="768" y="252" width="81" height="40" rx="7" fill="#ebeff4" stroke="#536883"/>
+  <text x="808.5" y="277" class="detail">Measure</text>
+
+  <path d="M136 309v9h233v-9 M394 309v9h347v-9" class="wire"/>
+  <text x="252.5" y="342" class="detail">State and objective preparation A</text>
+  <text x="567.5" y="342" class="detail">Repeat the Grover step Q exactly k times</text>
+</svg>

@@ -46,8 +46,6 @@ def _normal(x: np.ndarray) -> Estimate:
     return Estimate(float(x.mean()), float(se), float(1.96 * se))
 
 
-# --------------------------------------------------------------- the methods
-
 def monte_carlo(s: Scenario, n: int, rng: np.random.Generator) -> dict[str, Estimate]:
     p = annual_distribution(s).ravel()
     paths = _inverse_cdf(rng.random((n, s.years)), p)
@@ -76,9 +74,9 @@ def sobol(s: Scenario, n: int, rng: np.random.Generator) -> dict[str, Estimate]:
 def stratified(s: Scenario, n: int, rng: np.random.Generator) -> dict[str, Estimate]:
     """Strata = first year with any payout; no-payout paths contribute exactly 0."""
     p = annual_distribution(s).ravel()
-    p0 = p[0]                                   # state (0,0,0,0)
+    p0 = p[0]  # state (0,0,0,0)
     p_pay = p.copy()
-    p_pay[0] = 0.0                              # annual dist conditional on a payout
+    p_pay[0] = 0.0  # annual dist conditional on a payout
     w = np.array([p0 ** (k - 1) * (1 - p0) for k in range(1, s.years + 1)])
     n_k = np.maximum(np.round(n * w / w.sum()).astype(int), 2)
     mean = {k: 0.0 for k in TARGETS}

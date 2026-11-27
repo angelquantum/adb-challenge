@@ -6,7 +6,7 @@ of the oracle A and of the Grover operator Q, and two-qubit gates in the deepest
 
 Backends
     oracle  exact Grover statistics of the ideal circuit (any n; fast)
-    aer     the actual Qiskit circuits Q^k A on Qiskit Aer (n <= 3; lookup oracle, exact for
+    lightning.qubit / default.qubit  PennyLane circuits Q^k A (n <= 3; lookup oracle, exact for
             every target). --shots-mode runs literal measured shots instead of drawing them
             from the simulated circuit probabilities.
 """
@@ -17,7 +17,7 @@ import numpy as np
 
 from classical import SCENARIOS
 
-from .circuits import CircuitSampler, gate_counts, grover_operator, oracle
+from .circuits import DEVICES, CircuitSampler, gate_counts, grover_operator, oracle
 from .iqae import GroverModel, iqae
 from .portfolio import LABELS, TARGETS, PortfolioModel, adb_portfolio
 
@@ -34,12 +34,12 @@ def main() -> None:
     ap.add_argument("--eps", type=float, default=0.01, help="target CI half-width, relative to the value")
     ap.add_argument("--alpha", type=float, default=0.05, help="1 - confidence level")
     ap.add_argument("--shots", type=int, default=100, help="shots per IQAE round")
-    ap.add_argument("--backend", default="oracle", choices=["oracle", "aer"])
-    ap.add_argument("--shots-mode", action="store_true", help="aer: run literal measured shots")
+    ap.add_argument("--backend", default="oracle", choices=("oracle", *DEVICES))
+    ap.add_argument("--shots-mode", action="store_true", help="use PennyLane finite-shot sampling")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
-    if args.backend == "aer" and args.n > 3:
-        ap.error("the Aer backend simulates the full statevector; use --n <= 3")
+    if args.backend != "oracle" and args.n > 3:
+        ap.error("the PennyLane backend simulates the full statevector; use --n <= 3")
 
     m = PortfolioModel(adb_portfolio(args.n, args.scenario))
     targets = TARGETS if args.target == "all" else (args.target,)
@@ -49,10 +49,11 @@ def main() -> None:
     for t in targets:
         k = TARGETS.index(t)
         a = m.amplitude(k)
-        A = oracle(m, t, "lookup" if args.backend == "aer" else "scalable")
+        A = oracle(m, t, "lookup" if args.backend != "oracle" else "scalable")
         Q = grover_operator(A)
-        if args.backend == "aer":
-            sampler = CircuitSampler(A, Q, mode="shots" if args.shots_mode else "statevector")
+        if args.backend != "oracle":
+            sampler = CircuitSampler(A, Q, mode="shots" if args.shots_mode else "statevector",
+                                     device=args.backend)
         else:
             sampler = GroverModel(a)
         t0 = time.perf_counter()

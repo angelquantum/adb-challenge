@@ -1,12 +1,7 @@
-"""
-ADB 2-country catastrophe bond model
-(brief - Section 3b, steps 1 -7)
+"""Build the exact annual and three-year loss distributions for two countries.
 
-Builds the exact annual and 3-year term distributions
-over the state:
-    (a, b, r1, r2):
-        - a, b : cumulative earthquake steps, country 1 / 2, values on [0,...,4]
-        - r1, r2: precipitation trigger, country 1 / 2, values on {0, 1}
+An outcome (a, b, r1, r2) records earthquake payout quarters (0 to 4)
+and the rain trigger (0 or 1) for each country.
 """
 from __future__ import annotations
 
@@ -15,25 +10,21 @@ from dataclasses import dataclass, replace
 import numpy as np
 from scipy.linalg import expm
 
-# GLOBAL
-EARTHQUAKE_STEPS = 5 # 0 to 4
-RAIN_STEPS = 2       # 0 or 1
-ANNUAL_SHAPE = (EARTHQUAKE_STEPS, EARTHQUAKE_STEPS, RAIN_STEPS, RAIN_STEPS) # 100
-N_ANNUAL = int(np.prod(ANNUAL_SHAPE))  # 100
-STATE_CAP = np.array(ANNUAL_SHAPE) - 1  # (4, 4, 1, 1)
+EARTHQUAKE_STEPS = 5
+RAIN_STEPS = 2
+ANNUAL_SHAPE = (EARTHQUAKE_STEPS, EARTHQUAKE_STEPS, RAIN_STEPS, RAIN_STEPS)
+N_ANNUAL = int(np.prod(ANNUAL_SHAPE))
+STATE_CAP = np.array(ANNUAL_SHAPE) - 1
 
 @dataclass(frozen=True)
 class Scenario:
     """All inputs of one benchmark scenario. Defaults are the base case."""
     name: str = "adb-base"
-    # Annual earthquake payout exceedance probs
     eq_tail_1: tuple[float, ...] = (0.03883, 0.02331, 0.01790, 0.01184) # Kyrgyz Republic
     eq_tail_2: tuple[float, ...] = (0.03925, 0.01743, 0.01332, 0.01043) # Tajikistan
-    # Conditional probs
     cond_2_given_1: float = 0.075 # Taj given Kyr
     cond_1_given_2: float = 0.074
     eq_m: float = 1.0
-    # Annual rain
     pr_annual_prob: float = 0.02 # q, per country
     pr_cr: float = 0.25 # c_r
     pr_m: float = 1.0
@@ -74,9 +65,6 @@ def get_scenario(scenario: str | Scenario) -> Scenario:
     except KeyError:
         raise ValueError(f"unknown scenario {scenario!r}; choose from {list(SCENARIOS)}") from None
 
-# =================================
-#           Earthquake
-# =================================
 def compound_poisson_rates(tail: tuple[float, ...]) -> tuple[np.ndarray, float]:
     """
     Step 2, eqs (2)-(3): rates (λ1...λ4) and total rate λ
@@ -139,9 +127,6 @@ def eq_annual(scenario: str | Scenario) -> np.ndarray:
     s = get_scenario(scenario)
     return expm(eq_generator(s))[0].reshape(EARTHQUAKE_STEPS, EARTHQUAKE_STEPS)
 
-# =================================
-#           Precipitation
-# =================================
 def pr_annual(scenario: str | Scenario) -> np.ndarray:
     """
     Step 5, eqs. (5)-(6): annual precipitation distribution, shape (2, 2): P[r1, r2]
@@ -156,9 +141,6 @@ def pr_annual(scenario: str | Scenario) -> np.ndarray:
     P11 = 1 - P00 - P01 - P10
     return np.array([[P00, P01], [P10, P11]])
 
-# =================================
-#         Annual Term states
-# =================================
 def annual_distribution(scenario: str | Scenario) -> np.ndarray:
     """
     Step 6: annual joint distribution, shape (5, 5, 2, 2): P[a, b, r1, r2]
@@ -187,7 +169,7 @@ def term_distribution(scenario: str | Scenario) -> np.ndarray:
     s = get_scenario(scenario)
     annual = annual_distribution(s).ravel()
     states = annual_states()
-    # transition table: next_idx[i, j] = index of cap(state_i + state_j)
+    # Map each pair of annual states to their capped sum.
     summed = add_capped(states[:, None, :], states[None, :, :])
     next_idx = np.ravel_multi_index(tuple(summed.transpose(2, 0, 1)), ANNUAL_SHAPE)
     term = np.zeros(N_ANNUAL)
@@ -198,9 +180,6 @@ def term_distribution(scenario: str | Scenario) -> np.ndarray:
         term = new
     return term.reshape(ANNUAL_SHAPE)
 
-# =================================
-#             Losses
-# =================================
 def losses(states: np.ndarray, scenario: str | Scenario) -> tuple[np.ndarray, np.ndarray]:
     """
     Eq. (7): principal losses (L1, L2)

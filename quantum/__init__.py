@@ -1,22 +1,4 @@
-"""Iterative quantum amplitude estimation (IQAE) for the n-country joint-loss model.
-
-Modules
-    portfolio   n-country generalisation of the brief's model and its exact factorised solver
-    baselines   classical samplers on n countries (Monte Carlo, Sobol, stratified, importance)
-    iqae        IQAE (Grinko et al. 2021) with a pluggable backend: exact Grover statistics
-                (oracle level) or the actual circuits on Qiskit Aer
-    circuits    Qiskit oracles (shared-shock state preparation, loss register), Grover
-                operator, gate and Clifford+T counts, Aer-backed sampler
-    resources   fault-tolerant resource estimate
-    benchmark   2, 3, 5 and 10 countries: exact, classical, IQAE and its limiting factors
-    report      figures and the PDF report (docs/)
-
-Run from the repo root so that `classical` is importable:
-
-    python -m quantum --n 5 --target exceedance --eps 0.01
-    python -m quantum.benchmark
-    python -m quantum.report
-"""
+"""Quantum amplitude estimation for the joint-loss model."""
 from .iqae import GroverModel, IQAEResult, iqae
 from .portfolio import (
     LABELS,
