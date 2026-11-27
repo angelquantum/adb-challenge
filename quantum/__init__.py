@@ -13,9 +13,9 @@ Modules
 
 Run from the repo root so that `classical` is importable:
 
-    python -m quantum.new --n 5 --target exceedance --eps 0.01
-    python -m quantum.new.benchmark
-    python -m quantum.new.report
+    python -m quantum --n 5 --target exceedance --eps 0.01
+    python -m quantum.benchmark
+    python -m quantum.report
 """
 from .iqae import GroverModel, IQAEResult, iqae
 from .portfolio import (

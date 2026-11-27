@@ -1,8 +1,8 @@
 """PDF report: IQAE benchmark at 2, 3, 5 and 10 countries and the factors that limit it.
 
-python -m quantum.new.report   ->  quantum/new/results/figures/*.png and
+python -m quantum.report   ->  results/figures/*.png and
                                    docs/IQAE_benchmark_and_limits_2-10_countries.pdf
-Every number in the text is read from quantum/new/results (run quantum.new.benchmark first).
+Every number in the text is read from results (run quantum.benchmark first).
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ from . import figures as fg
 from .benchmark import ALPHA, BUDGETS, CLASSICAL_REPS, IQAE_REPS, SHOTS
 from .portfolio import TARGETS
 
-OUT = Path(__file__).resolve().parents[2] / "docs" / "IQAE_benchmark_and_limits_2-10_countries.pdf"
+OUT = Path(__file__).resolve().parents[1] / "docs" / "IQAE_benchmark_and_limits_2-10_countries.pdf"
 
 # ---------------------------------------------------------------- fonts, styles, helpers
 
@@ -255,7 +255,7 @@ def build() -> Path:
               P("Iterative quantum amplitude estimation for joint catastrophe-bond risk", "title"),
               P("Benchmark at 2, 3, 5 and 10 countries, and the factors that limit IQAE", "subtitle"),
               P(f"ADB Quantum Challenge · {date.today():%d %B %Y} · code and data: <font face='DVM'>"
-                "quantum/new/</font> (results in <font face='DVM'>quantum/new/results/</font>)", "small"),
+                "quantum/</font> (results in <font face='DVM'>results/</font>)", "small"),
               Spacer(1, 0.3 * cm)]
     s01 = slopes[0.01]
     story += [callout([
@@ -366,7 +366,7 @@ def build() -> Path:
     rows = [["Implementation, backend", "Target", "ε", "Runs", "Estimate", "Exact", "Rel. RMSE", "CI covers",
              "Calls", "k<sub>max</sub>"]]
     for r in e2e:
-        if r["implementation"] == "quantum.new.iqae" and r["reps"] > 1 and r["eps_rel"] == 0.05:
+        if r["implementation"] == "quantum.iqae" and r["reps"] > 1 and r["eps_rel"] == 0.05:
             continue
         rows.append([f"{r['implementation']}, {r['backend'].split(' (')[0]}", GN[r["target"]],
                      f"{r['eps_rel']:.0%}", f"{r['reps']:.0f}", val(r["target"], r["estimate_mean"]),
@@ -629,9 +629,9 @@ def build() -> Path:
               H2("Reproduce"),
               P("From the repository root, with <font face='DVM'>requirements.txt</font> installed (Python 3.12, "
                 "Qiskit 2.6, Qiskit Aer 0.18):", "small"),
-              P("python -m quantum.new.benchmark      # ~1 h on 12 cores → quantum/new/results/<br/>"
-                "python -m quantum.new.report         # figures + this PDF<br/>"
-                "python -m quantum.new --n 10 --target exceedance --eps 0.01   # one IQAE run<br/>"
+              P("python -m quantum.benchmark      # ~1 h on 12 cores → results/<br/>"
+                "python -m quantum.report         # figures + this PDF<br/>"
+                "python -m quantum --n 10 --target exceedance --eps 0.01   # one IQAE run<br/>"
                 "pytest", "mono"),
               P("<b>Caveats.</b> IQAE accuracies are oracle-level simulations of an ideal device, verified against "
                 "the circuits for n ≤ 3; circuits beyond that are counted, not simulated. Noise results use a "

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from quantum.new.distributed_iqae import (
+from quantum.distributed_iqae import (
     Estimate,
     _aggregate,
     _group_law,
@@ -9,7 +9,7 @@ from quantum.new.distributed_iqae import (
     _tasks,
     run_distributed_iqae,
 )
-from quantum.new.portfolio import adb_portfolio, exact_targets, loss_unit, outcome_losses, shock_model
+from quantum.portfolio import adb_portfolio, exact_targets, loss_unit, outcome_losses, shock_model
 
 
 @pytest.mark.parametrize("scenario", ["adb-base", "adb-common-shock", "adb-rain-cover"])

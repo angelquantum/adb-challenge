@@ -1,139 +1,85 @@
 # ADB Quantum Challenge — Joint-Loss Modelling for Natural Catastrophe Risk
 
-Code for our Phase 1 submission: classical reproduction of the reference values, a first quantum amplitude estimation (QAE) prototype, and the Iterative QAE (IQAE) version used in the proposal.
-
-## Repository structure
+Phase 1 code: exact classical reproduction of the brief's reference values, and Iterative Quantum Amplitude Estimation (IQAE) for an n-country catastrophe-bond portfolio, both monolithic and distributed.
 
 ```
-classical/      Classical reproduction: exact enumeration + sampling baselines
-quantum/        QAE, first version
-└── new/        Iterative QAE (shared-shock loading)
-tests/          pytest suite for classical/
-README.md
-pyproject.toml  ruff + pytest config
-requirements.txt
-.gitignore
+classical/   exact enumeration of the brief's model + classical sampling baselines
+quantum/     n-country model, IQAE, Qiskit circuits, distributed IQAE, benchmarks
+results/     benchmark CSVs, BENCHMARK.md, figures/
+tests/       pytest suite
 ```
 
-## Installation
+## Setup
 
-Requires Python 3.11+.
+Python 3.11+. Run everything from the repo root.
 
 ```bash
-git clone https://github.com/angelquantum/adb-challenge.git
-cd adb-challenge
-
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-
+git clone https://github.com/angelquantum/adb-challenge.git && cd adb-challenge
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+pytest && ruff check .
 ```
 
-## 1. Classical reproduction — `classical/`
-
-Reproduces the exact reference values of the brief (Table 5) for all scenarios (`adb-base`, `adb-independent`, `adb-common-shock`, `adb-rain-stress`, `adb-rain-cover`) by exact enumeration, and runs the classical baselines the quantum methods are compared against: plain Monte Carlo, scrambled Sobol, stratified sampling and importance sampling.
-
-```bash
-python -m classical                                   # from the repo root
-python -m classical --scenario adb-independent --n 65536 --seed 0
-```
-
-Prints the exact Table 5 values for all scenarios, then each sampling baseline for the chosen scenario as estimate ± 95% CI and relative error against the exact value. Options: `--scenario` (default `adb-base`), `--n` term paths per method (default 65536), `--seed`.
-
-| Scenario | Change from base |
-|---|---|
-| `adb-base` | Brief's base case |
-| `adb-independent` | No earthquake or rain dependence between countries (`eq_m = 0`, `c_r = 0`) |
-| `adb-common-shock` | Shared earthquake rate doubled (`eq_m = 2`) |
-| `adb-rain-stress` | Rain intensity doubled (`pr_m = 2`) |
-| `adb-rain-cover` | Limits shifted from earthquake to rain: EQ 60m, rain 20m |
+## Targets
 
 | Target (three-year term) | Meaning |
 |---|---|
-| `term_expected_principal_loss_usd` | E[L1 + L2] |
-| `term_joint_attachment_probability` | P(both bonds pay out) |
-| `term_portfolio_loss_exceedance_probability` | P(L1 + L2 > T), T = 80m |
-| `term_portfolio_stop_loss_usd` | E[max(L1 + L2 − T, 0)] |
-| `term_both_bonds_exhausted_probability` | P(both bonds lose their full principal) |
+| `expected_loss` | E[L], total principal loss |
+| `all_pay` | P(every bond pays out) |
+| `exceedance` | P(L > T), T = 80m at n = 2 (half the total principal) |
+| `stop_loss` | E[max(L − T, 0)] |
+| `all_exhausted` | P(every bond loses its full principal) |
 
-The package is importable from other code. Run that code from the repo root as a module (e.g. `python -m quantum.new.<module>`) so `classical` is on the import path:
+Scenarios: `adb-base` (the brief), `adb-independent` (no cross-country dependence), `adb-common-shock` (shared quake rate ×2), `adb-rain-stress` (rain intensity ×2), `adb-rain-cover` (limits EQ 60m / rain 20m).
 
-```python
-from classical import term_distribution, annual_states, TARGETS, exact_targets
+## Classical — `classical/`
+
+Reproduces Table 5 of the brief exactly for every scenario, then runs the baselines (Monte Carlo, scrambled Sobol, stratified, importance sampling) with 95% CIs.
+
+```bash
+python -m classical --scenario adb-base --n 65536
 ```
+
+Modules: `model.py` (rates, EQ Markov chain, precipitation, term distributions), `targets.py` (payoffs, `exact_targets()`), `sampling.py` (`estimate()`).
+
+## IQAE — `quantum/`
+
+First at n=2 countries, we did a reproduction of 
+brief's exact enumeration results.
+Given the shared shock state, countries are independent, so the joint law is a mixture of 10 product laws.
+Both the exact solver and the quantum state preparation use this. IQAE needs no phase estimation, so its circuits are shallower than canonical QAE's.
+We also did a projection for case n>2 countries, to estimate the limitation as the app scales.
+
+```bash
+# IQAE vs exact, with resource counts
+python -m quantum 
+(--n [number_of_countries] --target exceedance --eps 0.01) 
+
+python -m quantum.benchmark                              # n = 2, 3, 5, 10 -> results/ (~1 h, 12 cores)
+python -m quantum.exact_scaling                          # exact solver scaling, P(all exhausted) cost
+python -m quantum.report                                 # figures + docs/IQAE_benchmark_and_limits_2-10_countries.pdf
+```
+
+Options: `--n`, `--scenario`, `--target`, `--eps` (relative CI half-width), `--alpha`, `--shots`, `--backend oracle|aer`, `--shots-mode`, `--seed`.
 
 | Module | Contents |
 |---|---|
-| `model.py` | Scenarios, compound Poisson rates, EQ Markov chain, precipitation, annual and term distributions, losses |
-| `targets.py` | The five focus targets as payoff functions `f(state, scenario)`, `exact_targets()` |
-| `sampling.py` | Monte Carlo, scrambled Sobol, stratified, importance sampling, via `estimate()` |
+| `portfolio.py` | n-country model, shock factorisation, exact solver, brute-force check |
+| `baselines.py` | n-country classical samplers |
+| `iqae.py` | IQAE with Clopper-Pearson intervals; exact Grover statistics (optionally noisy) or circuit backend |
+| `circuits.py` | Qiskit oracles, Grover operator, gate / Clifford+T counts, `CircuitSampler` on Aer |
+| `resources.py` | fault-tolerant estimate (T count, code distance, physical qubits, run time) |
+| `benchmark.py`, `exact_scaling.py` | benchmark runs writing to `results/` |
+| `analysis.py`, `figures.py`, `report.py` | tables, figures, PDF report |
 
-Tests and lint (from the repo root):
+## Distributed IQAE — `quantum/distributed_iqae.py`
 
-```bash
-pytest                  # normalisation, input-tail reproduction, sampling vs exact
-ruff check .
-```
-
-## 2. QAE, first version — `quantum/`
-
-First prototype: loads the joint loss distribution into amplitudes, computes the payout indicator into an objective qubit, and estimates the amplitude with canonical (phase-estimation-based) QAE. Runs on the Qiskit Aer simulator.
-
-> Code not yet committed.
-
-## 3. Iterative QAE — `quantum/new/`
-
-Current method: shared-shock state loading combined with Iterative QAE (Grinko et al., 2021). No phase estimation, so circuits are shallower and closer to what current hardware can run. Reports estimates against the exact values, plus resource counts (qubits, depth, two-qubit gates, shots).
-
-The brief's model is generalised to n countries (alternating Kyrgyz-like and Tajik-like parameters, one regional earthquake stream, one regional rain stream, T = half the total principal). At n = 2 it is exactly the brief's model and reproduces Table 5 through the `classical` package. Given the shared shock state z = (K regional quakes, J regional rain), the countries are independent, so the joint law is a mixture of 10 product laws. The exact solver and the quantum state preparation both use this.
-
-Run from the repo root:
+Country groups run independent local IQAE circuits, each conditioned on a shared-shock stratum fixed by a classical host. The host combines the local estimates: it adds expected losses, multiplies attachment/exhaustion probabilities, convolves group loss distributions for exceedance and stop loss, then averages over the shock weights. Two single-country QPUs need five logical qubits each.
 
 ```bash
-python -m quantum.new --n 5 --target exceedance --eps 0.01         # one IQAE run per target, with resources
-python -m quantum.new --n 2 --backend aer                          # IQAE on the actual Qiskit circuits (Aer)
-python -m quantum.new.benchmark                                    # 2, 3, 5, 10 countries -> quantum/new/results/ (~1 h, 12 cores)
-python -m quantum.new.report                                       # figures + docs/IQAE_benchmark_and_limits_2-10_countries.pdf
+python -m quantum.distributed_iqae --scenario adb-base --capacities 5 6 --seed 1729
+python -m quantum.distributed_iqae --countries 3 --groups 0,1 2 --parallel
+python -m quantum.distributed_benchmark                  # vs monolithic IQAE and classical -> results/distributed.csv
 ```
 
-`python -m quantum.new` options: `--n`, `--scenario`, `--target` (`all`, `expected_loss`, `all_pay`, `exceedance`, `stop_loss`, `all_exhausted`), `--eps` (relative CI half-width), `--alpha`, `--shots` (per round), `--backend oracle|aer`, `--shots-mode` (literal measured shots on Aer).
-
-| Module | Contents |
-|---|---|
-| `portfolio.py` | n-country model, shock-state factorisation, exact solver, brute-force check |
-| `baselines.py` | n-country Monte Carlo, scrambled Sobol, stratified (on the shock state), importance sampling |
-| `iqae.py` | IQAE with Clopper-Pearson intervals and a pluggable backend: exact Grover statistics (with optional depolarising noise) or the circuits |
-| `circuits.py` | Qiskit oracles (shared-shock loader, Fourier-adder loss register, all-pay / all-exhausted objectives, lookup oracle), Grover operator, gate and Clifford+T counts, `CircuitSampler` on Aer |
-| `resources.py` | fault-tolerant estimate (T counts, code distance, physical qubits, run time) |
-| `benchmark.py` | exact, classical baselines, IQAE, circuit counts, noise, depth/query trade-offs, Aer validation and end-to-end runs |
-| `analysis.py`, `figures.py`, `report.py` | result tables, figures and the PDF |
-
-Outputs in `quantum/new/results/`: `BENCHMARK.md` (summary tables), `exact.csv`, `classical.csv`, `iqae.csv`, `counts.csv`, `noise.csv`, `noisy_circuit.csv`, `tradeoff.csv`, `validation.csv`, `e2e.csv`, `figures/`. The report [docs/IQAE_benchmark_and_limits_2-10_countries.pdf](docs/IQAE_benchmark_and_limits_2-10_countries.pdf) covers the benchmark at 2, 3, 5 and 10 countries and the factors that limit IQAE: depth growing as the event gets rarer, gate-error requirements, noise bias, the depth–query trade-off, the confidence level, fault-tolerant cost, and the classical shortcut this model allows.
-
-Tests: `pytest tests/test_iqae.py` checks Table 5 at n = 2, brute force at n = 3 and 4, the samplers, IQAE coverage, and that the oracles load the exact amplitudes on Aer. It also runs an end-to-end IQAE on the circuits.
-
-## Distributed IQAE
-
-Distributed IQAE runs independent local circuits on country groups and combines their estimates on a
-classical host. It reuses the repository's shared-shock conditional distributions and
-Qiskit/Aer IQAE backend. The host fixes the capped shared earthquake count and shared
-rain flag for each stratum. Two single-country QPUs require five logical wires each,
-including one reusable objective flag.
-
-    python -m quantum.new.distributed_iqae --scenario adb-base --capacities 5 6 --seed 1729
-
-The command reports all five estimates and intervals as JSON, along with per-QPU shots,
-forward and inverse preparations, and timings. Each inverse preparation corresponds to
-one local Grover iterate. The --groups option takes space-separated QPU groups, with
-comma-separated zero-based country indices within each group. For example, use
---countries 3 --groups 0,1 2. Add --parallel to run independent simulator workloads
-concurrently. The --epsilon option controls local normalized precision, and --shots
-and --max-rounds set the per-task budget. A local interval can remain wider than the
-requested precision at the round cap.
-
-The coordinator adds conditional expected losses, multiplies conditional attachment
-and exhaustion probabilities, and convolves conditional group loss distributions for
-exceedance and stop loss. It averages the results over the shared-shock weights.
-Portfolio intervals account for the family of local estimates and propagate loss-CDF
-bounds by stochastic ordering. The local circuits execute in simulation, and portfolio
-aggregation runs classically.
+Outputs JSON with the five estimates, their intervals, per-QPU shots, preparations and timings. Options: `--groups` (comma-separated country indices per QPU), `--capacities` (qubits per QPU), `--epsilon`, `--alpha`, `--shots`, `--max-rounds`, `--parallel`.

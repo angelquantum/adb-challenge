@@ -1,4 +1,4 @@
-"""python -m quantum.new [--n 2] [--scenario adb-base] [--target all] [--eps 0.01] [--backend oracle]
+"""python -m quantum [--n 2] [--scenario adb-base] [--target all] [--eps 0.01] [--backend oracle]
 
 Runs IQAE on the n-country portfolio and prints, per target, the estimate against the exact
 value and the resources: oracle calls, shots, deepest Grover power, qubits and two-qubit gates

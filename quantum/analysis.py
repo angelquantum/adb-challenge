@@ -1,4 +1,4 @@
-"""Read the benchmark CSVs (quantum/new/results) and derive the summary numbers.
+"""Read the benchmark CSVs (results) and derive the summary numbers.
 
 Shared by benchmark.py (BENCHMARK.md) and report.py (figures and PDF).
 """
@@ -12,7 +12,7 @@ import numpy as np
 
 from .portfolio import PROBABILITY_TARGETS, TARGETS
 
-RESULTS = Path(__file__).resolve().parent / "results"
+RESULTS = Path(__file__).resolve().parents[1] / "results"
 CLASSICAL = ("monte_carlo", "sobol", "stratified", "importance")
 METHOD_LABEL = {"monte_carlo": "Monte Carlo", "sobol": "Scrambled Sobol", "stratified": "Stratified",
                 "importance": "Importance sampling", "iqae": "IQAE"}

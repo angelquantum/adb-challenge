@@ -1,6 +1,6 @@
 """Figures for the IQAE report (static PNGs for print, light theme).
 
-python -m quantum.new.figures   ->  quantum/new/results/figures/*.png
+python -m quantum.figures   ->  results/figures/*.png
 
 Colour follows the entity: IQAE and each classical sampler keep one categorical slot (validated
 palette, adjacent CVD dE >= 11.8), every series also has its own marker, and portfolio size uses

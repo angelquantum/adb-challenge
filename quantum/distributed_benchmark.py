@@ -1,6 +1,6 @@
 """Benchmark of distributed IQAE (distributed_iqae.py) against monolithic IQAE and the classical samplers.
 
-python -m quantum.new.distributed_benchmark [--ns 2 3 5 10] [--reps 50] [--workers 8] [--only run|figures]
+python -m quantum.distributed_benchmark [--ns 2 3 5 10] [--reps 50] [--workers 8] [--only run|figures]
 
     run      oracle-level distributed IQAE (exact Grover statistics of every local circuit, noiseless,
              as in iqae.csv) over a sweep of local precisions epsilon; one run estimates all five

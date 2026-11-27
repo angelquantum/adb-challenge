@@ -17,5 +17,5 @@ pythonpath = ["."]
 
 [tool.ruff.lint.per-file-ignores]
 # printed figure and report text uses typographic minus and multiplication signs on purpose
-"quantum/new/figures.py" = ["RUF001"]
-"quantum/new/report.py" = ["RUF001", "E501"]  # long lines are report prose
+"quantum/figures.py" = ["RUF001"]
+"quantum/report.py" = ["RUF001", "E501"]  # long lines are report prose

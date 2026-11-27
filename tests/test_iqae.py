@@ -1,12 +1,12 @@
-"""Tests for quantum/new: n-country model, n-country baselines, IQAE and the Qiskit oracles."""
+"""Tests for quantum: n-country model, n-country baselines, IQAE and the Qiskit oracles."""
 import numpy as np
 import pytest
 
 from classical import SCENARIOS
 from classical import exact_targets as brief_exact
-from quantum.new.baselines import METHODS, estimate
-from quantum.new.iqae import GroverModel, clopper_pearson, hit_probability, iqae
-from quantum.new.portfolio import (
+from quantum.baselines import METHODS, estimate
+from quantum.iqae import GroverModel, clopper_pearson, hit_probability, iqae
+from quantum.portfolio import (
     TARGETS,
     TO_BRIEF,
     PortfolioModel,
@@ -16,7 +16,7 @@ from quantum.new.portfolio import (
     loss_distribution,
     shock_model,
 )
-from quantum.new.resources import ft_estimate
+from quantum.resources import ft_estimate
 
 
 @pytest.mark.parametrize("sc", list(SCENARIOS))
@@ -102,7 +102,7 @@ qiskit_aer = pytest.importorskip("qiskit_aer")
 @pytest.mark.parametrize("kind", ["scalable", "lookup"])
 @pytest.mark.parametrize("target", TARGETS)
 def test_oracles_load_the_exact_amplitude(target, kind):
-    from quantum.new.circuits import objective_probability, oracle
+    from quantum.circuits import objective_probability, oracle
 
     m = PortfolioModel(adb_portfolio(2))
     k = TARGETS.index(target)
@@ -111,7 +111,7 @@ def test_oracles_load_the_exact_amplitude(target, kind):
 
 
 def test_grover_statistics_on_the_circuit():
-    from quantum.new.circuits import CircuitSampler, oracle
+    from quantum.circuits import CircuitSampler, oracle
 
     m = PortfolioModel(adb_portfolio(2))
     k = TARGETS.index("exceedance")
@@ -122,7 +122,7 @@ def test_grover_statistics_on_the_circuit():
 
 
 def test_end_to_end_iqae_on_aer():
-    from quantum.new.circuits import CircuitSampler, oracle
+    from quantum.circuits import CircuitSampler, oracle
 
     m = PortfolioModel(adb_portfolio(2))
     k = TARGETS.index("all_pay")
